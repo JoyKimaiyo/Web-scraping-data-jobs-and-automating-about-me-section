@@ -1,0 +1,10 @@
+# Ignore everything in this directory
+*
+
+# Except these specific files
+!db_connect.py
+!log.py
+!web.py
+
+# Also don't ignore the .gitignore file itself
+!.gitignore
