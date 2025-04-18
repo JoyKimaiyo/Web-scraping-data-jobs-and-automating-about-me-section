@@ -31,9 +31,25 @@ def insert_job(data):
         cursor = conn.cursor()
         
         sql = """
-        INSERT INTO jobs (title, company, location, link, source, date_posted)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE title=VALUES(title)
+        INSERT INTO jobs (
+            title, 
+            company, 
+            location, 
+            link, 
+            source, 
+            date_posted,
+            work_type,
+            employment_type,
+            description
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE 
+            title=VALUES(title),
+            company=VALUES(company),
+            location=VALUES(location),
+            work_type=VALUES(work_type),
+            employment_type=VALUES(employment_type),
+            description=VALUES(description)
         """
         cursor.execute(sql, data)
         conn.commit()

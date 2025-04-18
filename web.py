@@ -1,189 +1,244 @@
-import asyncio
+import os
+import time as tm
+import json
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime
+from dotenv import load_dotenv
 from playwright.async_api import async_playwright
-import sys
-from pathlib import Path
-import time
-
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-from db_connect import insert_job
+from playwright_stealth import stealth_async
 import logging
+import random
+import mysql.connector
+import asyncio
+from asyncio import Semaphore
 
-logging.basicConfig(level=logging.INFO)
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-COOKIE_PATH = Path(__file__).resolve().parent / "config" / "linkedin_cookies.json"
+load_dotenv()
 
-async def scrape_linkedin_jobs(keyword="data analyst", location_type="remote"):
-    """Modern LinkedIn scraper with adaptive selectors"""
-    async with async_playwright() as p:
-        browser = None
-        try:
-            # Launch with visible browser for debugging
-            browser = await p.chromium.launch(
-                headless=False,
-                args=[
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                ],
-                slow_mo=1000  # Slow execution for observation
-            )
-            
-            context = await browser.new_context(
-                storage_state=COOKIE_PATH if COOKIE_PATH.exists() else None,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                viewport={"width": 1366, "height": 768}
-            )
-            
-            page = await context.new_page()
-            
-            # Build search URL
-            location_filters = {
-                "remote": "&f_WT=2",
-                "hybrid": "&f_WT=3",
-                "on site": "&f_WT=1"
-            }
-            location_filter = location_filters.get(location_type.lower(), "")
-            search_url = f"https://www.linkedin.com/jobs/search/?keywords={keyword}{location_filter}"
-            
-            logger.info(f"Navigating to: {search_url}")
-            await page.goto(search_url, timeout=60000)
-            
-            # Check for blocking mechanisms
-            if await page.query_selector('input#username'):
-                logger.error("⚠️ Login page detected - your cookies may be expired")
-                return
-            if await page.query_selector('#captcha-internal'):
-                logger.error("⚠️ CAPTCHA detected - LinkedIn is blocking you")
-                return
+sem = Semaphore(4)  # Limit concurrency
 
-            # Wait for page to fully load
-            await page.wait_for_load_state('networkidle', timeout=30000)
-            
-            # DEBUG: Save full page HTML for inspection
-            html_content = await page.content()
-            with open("linkedin_page.html", "w", encoding="utf-8") as f:
-                f.write(html_content)
-            logger.info("Saved page HTML to linkedin_page.html")
+# --- CONFIGURATION ---
+def load_config(config_file):
+    with open(config_file) as file:
+        return json.load(file)
 
-            # New approach to find jobs - using more generic selectors
-            jobs = await find_jobs_adaptively(page)
-            
-            if not jobs:
-                logger.error("❌ No jobs found after trying multiple approaches")
-                await page.screenshot(path="debug_no_jobs.png", full_page=True)
-                logger.info("Saved full page screenshot to debug_no_jobs.png")
-                logger.info("Please inspect linkedin_page.html and debug_no_jobs.png")
-                logger.info("Then update the selectors in the script accordingly")
-                return
+# --- DATABASE CONNECTION ---
+def get_db_connection():
+    return mysql.connector.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            user=os.getenv("DB_USER", "root"),
+            password=os.getenv("DB_PASSWORD", "Timmy@2013"),
+            database=os.getenv("DB_NAME", "job_scraper")
+    )
 
-            logger.info(f"✅ Found {len(jobs)} job listings")
-            
-            # Process job listings
-            for job in jobs[:10]:  # Process first 10 jobs
-                try:
-                    # Use more generic selectors that are less likely to change
-                    title = await job.evaluate('''el => {
-                        const titleEl = el.querySelector('a[href*="/jobs/view/"]') || 
-                                       el.querySelector('a[data-tracking-control-name*="job-card"]') ||
-                                       el.querySelector('a[data-tracking-id*="job-card-title"]');
-                        return titleEl ? titleEl.innerText.trim() : null;
-                    }''')
-                    
-                    company = await job.evaluate('''el => {
-                        const companyEl = el.querySelector('span[class*="company"]') || 
-                                         el.querySelector('a[data-tracking-control-name*="company"]') ||
-                                         el.querySelector('span[class*="employer"]');
-                        return companyEl ? companyEl.innerText.trim() : null;
-                    }''')
-                    
-                    location = await job.evaluate('''el => {
-                        const locEl = el.querySelector('span[class*="location"]') || 
-                                      el.querySelector('span[class*="workplace"]') ||
-                                      el.querySelector('span[class*="geo"]');
-                        return locEl ? locEl.innerText.trim() : null;
-                    }''')
-                    
-                    link = await job.evaluate('''el => {
-                        const linkEl = el.querySelector('a[href*="/jobs/view/"]') || 
-                                       el.querySelector('a[data-tracking-control-name*="job-card"]');
-                        return linkEl ? linkEl.href : null;
-                    }''')
-                    
-                    if title and company and link:
-                        logger.info(f"Found job: {title} at {company} ({location})")
-                        insert_job((
-                            title,
-                            company,
-                            location if location else None,
-                            link,
-                            'linkedin',
-                            None
-                        ))
-                        
-                except Exception as e:
-                    logger.warning(f"⚠️ Failed to process job: {str(e)}")
+# --- SAVE JOB TO DATABASE ---
+def save_to_db(job):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        query = """
+            INSERT INTO jobs (title, company, location, link, source, date_posted, work_type, employment_type, description)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE description = VALUES(description)
+        """
+
+        values = (
+            job.get("title"),
+            job.get("company"),
+            job.get("location"),
+            job.get("job_url"),
+            "LinkedIn",
+            job.get("date"),
+            job.get("work_type", "N/A"),
+            job.get("employment_type", "N/A"),
+            job.get("description", "N/A")
+        )
+
+        cursor.execute(query, values)
+        conn.commit()
+        logger.info(f"✅ Inserted: {job['title']} at {job['company']}")
+    except Exception as e:
+        logger.error(f"❌ Failed to insert into DB: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+# --- JOB CARD SCRAPER ---
+def get_job_cards(config):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    jobs = []
+    session = requests.Session()
+
+    for keyword in config['keywords']:
+        for location in config['locations']:
+            location_param = f"&location={location}" if location else ""
+            url = f"https://www.linkedin.com/jobs/search/?keywords={keyword}{location_param}&f_TPR=r{config['date_range']}&position=1&pageNum=0"
+
+            try:
+                tm.sleep(random.uniform(1, 3))
+                response = session.get(url, headers=headers, timeout=15)
+                response.raise_for_status()
+
+                soup = BeautifulSoup(response.text, "html.parser")
+                job_elements = soup.find_all("div", class_="base-card")
+
+                if not job_elements:
+                    logger.warning(f"No job elements found for {keyword} in {location or 'global'}")
                     continue
-                    
+
+                for job_elem in job_elements:
+                    try:
+                        link_tag = job_elem.find("a", class_="base-card__full-link")
+                        if not link_tag or not link_tag.get("href"):
+                            continue
+
+                        title = job_elem.find("h3", class_="base-search-card__title")
+                        company = job_elem.find("h4", class_="base-search-card__subtitle")
+                        location_span = job_elem.find("span", class_="job-search-card__location")
+                        time_tag = job_elem.find("time")
+
+                        # Capture work type (Remote, Onsite, Hybrid)
+                        work_type = "N/A"
+                        if location_span:
+                            location_text = location_span.text.strip().lower()
+                            if "remote" in location_text:
+                                work_type = "Remote"
+                            elif "onsite" in location_text:
+                                work_type = "Onsite"
+                            elif "hybrid" in location_text:
+                                work_type = "Hybrid"
+
+                        job = {
+                            "job_url": link_tag["href"].split("?")[0],
+                            "title": title.text.strip() if title else "N/A",
+                            "company": company.text.strip() if company else "N/A",
+                            "location": location_span.text.strip() if location_span else "N/A",
+                            "date": time_tag["datetime"] if time_tag else str(datetime.today().date()),
+                            "work_type": work_type
+                        }
+                        jobs.append(job)
+
+                    except Exception as e:
+                        logger.error(f"Error parsing job element: {e}")
+                        continue
+
+            except requests.RequestException as e:
+                logger.error(f"Error fetching jobs for {keyword} in {location or 'global'}: {e}")
+                continue
+
+    return jobs
+
+# --- RETRY GOTO ---
+async def try_goto(page, url, retries=1):
+    for attempt in range(retries + 1):
+        try:
+            await page.goto(url, timeout=90000, wait_until='domcontentloaded')
+            return True
         except Exception as e:
-            logger.error(f"❌ Scraping failed: {str(e)}")
-            if browser:
-                await page.screenshot(path="final_error.png", full_page=True)
-                logger.info("Saved full page screenshot to final_error.png")
-        finally:
-            if browser:
-                await browser.close()
+            if attempt == retries:
+                raise
+            await page.wait_for_timeout(random.randint(2000, 4000))
 
-async def find_jobs_adaptively(page):
-    """Try multiple approaches to find job listings"""
-    # List of container selectors to try (ordered by likelihood)
-    container_selectors = [
-        'main.scaffold-layout__main',  # Main content area
-        'div.jobs-search-results-list',  # Jobs list container
-        'div.scaffold-layout__list-container',  # Alternative container
-        'ul.jobs-search__results-list',  # Older container
-        'div.jobs-search-results'  # Another alternative
-    ]
-    
-    # List of job item selectors to try
-    job_selectors = [
-        'div.job-card-container',  # Newest job card
-        'li.jobs-search-results__list-item',  # List item
-        'div.job-search-card',  # Older card
-        'div.base-card',  # Generic card
-        'section.job-card'  # Alternative
-    ]
-    
-    for container_selector in container_selectors:
-        container = await page.query_selector(container_selector)
-        if container:
-            logger.info(f"Found container with: {container_selector}")
-            
-            # Scroll within container to load more jobs
-            await container.evaluate('''container => {
-                container.scrollTop = container.scrollHeight;
-            }''')
-            await page.wait_for_timeout(2000)  # Wait for loading
-            
-            for job_selector in job_selectors:
-                jobs = await container.query_selector_all(job_selector)
-                if jobs:
-                    logger.info(f"Found {len(jobs)} jobs with: {job_selector}")
-                    return jobs
-    
-    # Fallback: Try finding any job-like elements
-    logger.info("Trying fallback selectors...")
-    fallback_jobs = await page.query_selector_all('''
-        a[href*="/jobs/view/"], 
-        div[data-tracking-id*="job-card"],
-        section[class*="job-card"]
-    ''')
-    
-    if fallback_jobs:
-        logger.info(f"Found {len(fallback_jobs)} jobs with fallback selectors")
-        return fallback_jobs
-    
-    return []
+# --- JOB DETAILS SCRAPER ---
+async def scrape_job_details(page, url):
+    await try_goto(page, url)
 
+    if "captcha" in page.url or await page.locator("input[name=captcha]").count() > 0:
+        logger.warning(f"🛑 CAPTCHA detected at {url}")
+        return {
+            "description": "CAPTCHA Blocked",
+            "work_type": "N/A",
+            "employment_type": "N/A"
+        }
+
+    try:
+        await page.wait_for_selector("div.description__text", timeout=10000)
+        description = await page.locator("div.description__text").inner_text()
+    except:
+        description = "N/A"
+
+    job_info = {
+        "description": description.strip()
+    }
+
+    try:
+        job_info["work_type"] = await page.locator("span:has-text('Work type') + span").inner_text()
+    except:
+        job_info["work_type"] = "N/A"
+
+    try:
+        job_info["employment_type"] = await page.locator("span:has-text('Employment type') + span").inner_text()
+    except:
+        job_info["employment_type"] = "N/A"
+
+    return job_info
+
+# --- JOB HANDLER ---
+async def process_job(job, page):
+    async with sem:
+        try:
+            logger.info(f"🔎 Processing: {job['title']}")
+            await stealth_async(page)
+            details = await scrape_job_details(page, job["job_url"])
+            job.update(details)
+            save_to_db(job)
+        except Exception as e:
+            logger.error(f"❌ Error processing job {job['job_url']}: {e}")
+
+# --- MAIN SCRAPER FUNCTION ---
+async def run_scraper(config_path):
+    start_time = tm.perf_counter()
+    processed_jobs = 0
+
+    try:
+        config = load_config(config_path)
+        logger.info(f"Starting scraper with config: {config}")
+
+        logger.info("Fetching job listings from LinkedIn...")
+        all_jobs = get_job_cards(config)
+        logger.info(f"Found {len(all_jobs)} total jobs in initial search")
+
+        if not all_jobs:
+            logger.warning("No jobs found at all. Possible issues:")
+            logger.warning("1. LinkedIn is blocking your requests (try changing IP or adding more headers)")
+            logger.warning("2. The selectors are outdated (check LinkedIn's current HTML structure)")
+            logger.warning("3. Your search parameters are too restrictive")
+            return
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                viewport={"width": 1920, "height": 1080}
+            )
+            page = await context.new_page()
+
+            for job in all_jobs:
+                await process_job(job, page)
+                processed_jobs += 1
+                await page.wait_for_timeout(random.randint(500, 1500))
+
+            await browser.close()
+
+    except Exception as e:
+        logger.error(f"Fatal error in scraper: {e}")
+    finally:
+        end_time = tm.perf_counter()
+        logger.info(f"Scraping completed in {end_time - start_time:.2f} seconds")
+        logger.info(f"Total jobs processed: {processed_jobs}")
+
+# --- ENTRY POINT ---
 if __name__ == "__main__":
-    asyncio.run(scrape_linkedin_jobs())
+    asyncio.run(run_scraper("config.json"))
