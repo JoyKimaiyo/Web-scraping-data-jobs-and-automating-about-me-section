@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-sem = Semaphore(4)  # Limit concurrency
+sem = Semaphore(4)  # Limit coqncurrency
 
 # --- CONFIGURATION ---
 def load_config(config_file):
