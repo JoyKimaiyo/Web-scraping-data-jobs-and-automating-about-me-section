@@ -13,7 +13,7 @@ load_dotenv()
 
 # --- Gemini API Function ---
 def generate_with_gemini(prompt):
-    api_key = "AIzaSyAbdATOEnSfQDnRV2-V2ZFKkg-5c_Qu8is"
+    api_key ="AIzaSyD_lhqgAJtsKj5dTY_mSm-5h2nNYhNkmNQ"
     api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     headers = {
