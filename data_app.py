@@ -51,7 +51,7 @@ def generate_with_gemini(prompt):
 # --- Load Jobs from CSV ---
 def fetch_jobs_from_csv(role):
     try:
-        df = pd.read_csv("/home/joy/airflow_env/Data_jobs/clean_jobs.csv")
+        df = pd.read_csv("clean_jobs.csv")
         df = df[df['title'].str.contains(role, case=False, na=False)]
         return df
     except Exception as e:
