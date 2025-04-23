@@ -6,6 +6,8 @@
 !log.py
 !web.py
 !data_app.py
+!clean_jobs.csv
+!requirements.txt
 
 # Also don't ignore the .gitignore file itself
 !.gitignore
