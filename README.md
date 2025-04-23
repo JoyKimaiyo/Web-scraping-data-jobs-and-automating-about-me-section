@@ -1,17 +1,40 @@
-# 📊 Web Scraping Data Jobs & Automating Cover Letter Generation
+# 📝 AI CV and Cover Letter Builder
 
-This project scrapes data jobs (Data Analyst, Data Scientist, Data Engineer, etc.) from **LinkedIn** using `web.py` and stores the data in **MySQL**. It also includes a **Streamlit app** that uses **Hugging Face AI** to generate a professional cover letter and "About Me" section.
+Crafting a compelling cover letter and summary for a job application can be intimidating. It requires distilling your skills, experience, and personality into a concise narrative that stands out — especially in a world where companies use keyword-driven AI to screen candidates.
+
+This project simplifies the process by:
+- Scraping job data (Data Analyst, Data Scientist, Data Engineer, etc.) from **LinkedIn** using `web.py`
+- Storing the data in a **MySQL** database
+- Analyzing job descriptions using **Natural Language Processing (NLP)** to extract and weigh keywords
+- Using **Gemini AI** in a **Streamlit** app to generate tailored cover letters and "About Me" sections
 
 ---
 
 ## 🔧 Features
 
-- 🔍 Scrape LinkedIn job listings based on keywords, location, and filters
-- 🧠 Use Hugging Face models to generate cover letters and About Me content
-- 📊 Simple UI via Streamlit (`data_app.py`)
-- 💾 Data saved in MySQL for easy querying and analysis
+- 🔍 Scrape LinkedIn job listings based on keyword, location, and filters
+- 🧠 Extract key skills using NLP and TF-IDF
+- ✨ Generate cover letters and About Me sections using **Gemini AI**
+- 📊 Interactive UI built with **Streamlit**
+- 💾 Store job data in **MySQL** for reuse and analysis
 
 ---
+
+## ⚙️ Configuration
+
+Customize your scraping behavior by editing `config.json`:
+
+```json
+{
+  "keywords": ["data analyst", "data scientist", "data engineer"],
+  "locations": ["", "Remote", "Onsite", "Hybrid"],
+  "date_range": "604800", 
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+  "languages": ["en"],
+  "desc_words": ["senior", "principal"],
+  "days_to_scrape": 7
+}
+
 
 ## ⚙️ Configuration
 
@@ -94,7 +117,7 @@ After scraping jobs, open the Streamlit app (`data_app.py`) to:
 
 - ✉️ Generate a **custom cover letter**
 - 🧍‍♂️ Auto-generate an **About Me** section
-- 🧠 Powered by Hugging Face models
+- 🧠 Powered by Gemini
 
 ---
 
