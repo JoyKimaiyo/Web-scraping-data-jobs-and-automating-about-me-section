@@ -1,5 +1,11 @@
 # 📝 AI CV and Cover Letter Builder
 
+## 🚀 App
+
+Check out the live app here:  
+🔗 [Web Scraping Data Jobs & Automation App](https://joykimaiyo-web-scraping-data-jobs-and-automatin-data-app-1sozgx.streamlit.app/)
+
+
 Crafting a compelling cover letter and summary for a job application can be intimidating. It requires distilling your skills, experience, and personality into a concise narrative that stands out — especially in a world where companies use keyword-driven AI to screen candidates.
 
 This project simplifies the process by:
