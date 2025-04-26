@@ -15,7 +15,7 @@ load_dotenv()
 def generate_with_gemini(prompt):
     api_key = st.secrets["GM_API_TOKEN"]
     api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    
+
     headers = {
         "Content-Type": "application/json"
     }
@@ -36,7 +36,7 @@ def generate_with_gemini(prompt):
         response = requests.post(api_url, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         result = response.json()
-        
+
         if 'candidates' in result and len(result['candidates']) > 0:
             return result['candidates'][0]['content']['parts'][0]['text']
         return "⚠️ Error: Empty response from Gemini API"
@@ -48,7 +48,9 @@ def generate_with_gemini(prompt):
     except Exception as e:
         return f"⚠️ Unexpected Error: {str(e)}"
 
-# --- Load Jobs from CSV ---
+# --- Load Jobs from CSV (Cached) ---
+@st.cache_data
+
 def fetch_jobs_from_csv(role):
     try:
         df = pd.read_csv("clean_jobs.csv")
@@ -58,7 +60,9 @@ def fetch_jobs_from_csv(role):
         st.error(f"CSV Load Error: {str(e)}")
         return pd.DataFrame()
 
-# --- NLP Keyword Extraction ---
+# --- NLP Keyword Extraction (Cached) ---
+@st.cache_data
+
 def extract_keywords(texts, n=10):
     try:
         combined_text = " ".join(texts)
@@ -92,7 +96,7 @@ with st.sidebar:
 
     *Powered by Gemini AI and NLP analysis*
     """)
-    
+
     if 'last_api_response' in st.session_state:
         with st.expander("Last API Response"):
             st.json(st.session_state.last_api_response)
