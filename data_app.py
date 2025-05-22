@@ -50,7 +50,6 @@ def generate_with_gemini(prompt):
 
 # --- Load Jobs from CSV (Cached) ---
 @st.cache_data
-
 def fetch_jobs_from_csv(role):
     try:
         df = pd.read_csv("clean_jobs.csv")
@@ -62,7 +61,6 @@ def fetch_jobs_from_csv(role):
 
 # --- NLP Keyword Extraction (Cached) ---
 @st.cache_data
-
 def extract_keywords(texts, n=10):
     try:
         combined_text = " ".join(texts)
@@ -107,8 +105,11 @@ with st.sidebar:
     st.markdown("2. Click 'Generate' to create content")
     st.markdown("3. Copy the results to your resume")
 
-st.title("AI-Powered CV Builder (Gemini Edition) 🤖")
+st.title("AI-Powered CV Builder 📝")
 st.markdown("---")
+st.markdown("When applying for jobs, your resume often faces an initial screening by either a non-specialist recruiter quickly sifting through many applications or an automated system.")
+st.markdown("The key to success at this stage is ensuring your skills and experience directly align with the job description.")
+st.markdown("This tool analyzes 1000+ LinkedIn job descriptions for roles like data analyst, data engineer, and data scientist using Natural Language Processing (NLP). By extracting key terms, the AI then generates a tailored resume for you, including a compelling profile, relevant soft skills, and essential technical skills, all optimized to match the job's requirements.")
 
 # Role Selection
 col1, col2 = st.columns(2)
@@ -157,16 +158,16 @@ Guidelines:
 2. Style: Professional but approachable
 3. Include: Core skills, achievements, and value proposition
 4. Format: Complete sentences, no bullet points
-5. Avoid: Generic phrases like "team player"
+5. Avoid: Generic phrases like \"team player\"
 
 Example Structure:
-"[Role] with [X] years of experience in [skills]. Specialized in [specific area]. Proven track record of [achievement]. Passionate about [relevant interest]."
+\"[Role] with [X] years of experience in [skills]. Specialized in [specific area]. Proven track record of [achievement]. Passionate about [relevant interest].\"
 """
             about_me = generate_with_gemini(prompt)
             st.subheader("✨ Your AI-Tailored 'About Me'")
             st.success(about_me)
 
-            # Skills Generation
+            # Technical Skills Generation
             skill_prompt = f"""
 Extract the top 5 technical skills for a {level} {role} from these job descriptions:
 
@@ -176,10 +177,24 @@ Format:
 - Markdown bullet list
 - Each skill should include a 1-sentence explanation
 """
-
             skills = generate_with_gemini(skill_prompt)
+
+            # Soft Skills Generation
+            soft_skill_prompt = f"""
+Based on the job descriptions, list 2 soft skills that are most valuable for a {level} {role}.
+
+Format:
+- Markdown bullet list
+- Each soft skill should include a 1-sentence explanation
+"""
+            soft_skills = generate_with_gemini(soft_skill_prompt)
+
             st.subheader("💼 Top Skills for This Role")
+            st.markdown("#### 🛠️ Technical Skills")
             st.info(skills)
+
+            st.markdown("#### 🤝 Soft Skills")
+            st.info(soft_skills)
     else:
         st.error("No job descriptions found for this role.")
 
@@ -197,7 +212,7 @@ Requirements:
   2. Body: Match skills to job requirements
   3. Closing: Call to action + contact info
 - Include: 2-3 specific achievements
-- Avoid: Generic phrases like "I'm perfect for this role"
+- Avoid: Generic phrases like \"I'm perfect for this role\"
 
 Job Context:
 {combined_descriptions if 'combined_descriptions' in locals() else 'No job descriptions loaded'}
