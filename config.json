@@ -1,0 +1,11 @@
+{
+  "keywords": ["data analyst", "data scientist", "data engineer"],
+  "locations": ["", "Remote", "Onsite", "Hybrid"],
+  "date_range": "604800", 
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+  "languages": ["en"],
+  "desc_words": ["senior", "principal"],
+  "days_to_scrape": 7
+}
+
+  

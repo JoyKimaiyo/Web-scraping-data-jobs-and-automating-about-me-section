@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  data:
+    build:
+      context: ./data
+      dockerfile: Dockerfile
+    container_name: data
+    volumes:
+      - ./data:/app  # Mount the data code
+    restart: unless-stopped
+    # Optional environment vars if needed
+    # environment:
+    #   - VAR_NAME=value
+
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: app
+    ports:
+      - "8501:8501"  # Streamlit default port
+    volumes:
+      - ./app:/app   # Mount the app code
+    depends_on:
+      - data
+    restart: unless-stopped
+    # environment:
+    #   - VAR_NAME=value
+

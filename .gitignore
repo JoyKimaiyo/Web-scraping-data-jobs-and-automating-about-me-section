@@ -1,15 +1,73 @@
-# Ignore everything in this directory
-*
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
 
-# Except these specific files
-!db_connect.py
-!log.py
-!web.py
-!data_app.py
-!clean_jobs.csv
-!requirements.txt
-!Screencast from 2025-04-23 12-27-18.webm
+# Virtual environments
+.venv/
+env/
+venv/
 
-# Also don't ignore the .gitignore file itself
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# Environment variables
+.env
+*.env
+
+# MacOS and Linux trash files
+.DS_Store
+.Trash-*
+
+# VSCode settings
+.vscode/
+
+# System log files
+*.log
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Streamlit cache
+.streamlit/
+
+# Data files (customize as needed)
+*.csv
+!clean_jobs.csv  # <-- keep this one
+
+# Docker-related artifacts
+**/__pycache__/
+**/*.pyc
+*.pid
+*.sock
+
+# Ignore everything in data/ and app/ but allow Dockerfile and requirements
+data/*
+!data/Dockerfile
+!data/requirements.txt
+!data/web.py
+
+app/*
+!app/Dockerfile
+!app/requirements.txt
+!app/data_app.py
+
+# Allow specific files in root
+!/docker-compose.yml
+!/clean_jobs.csv
+!/Screencast from 2025-04-23 12-27-18.webm
+!/log.py
+!/db_connect.py
 !.gitignore
- 
+!data_app.py
+!convert to csv.py
