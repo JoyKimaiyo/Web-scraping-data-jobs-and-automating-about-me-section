@@ -49,6 +49,7 @@ def generate_with_gemini(prompt):
         return f"⚠️ Unexpected Error: {str(e)}"
 
 # --- Load Jobs from CSV (Cached) ---
+
 @st.cache_data
 def fetch_jobs_from_csv(role):
     try:
