@@ -106,10 +106,15 @@ with st.sidebar:
     st.markdown("3. Copy the results to your resume")
 
 st.title("AI-Powered CV Builder 📝")
+st.markdown("""
+When applying for jobs, your resume often faces an initial screening—either by a non-specialist recruiter quickly skimming applications or by an automated system.
+
+The key to success is ensuring your skills and experience directly align with the job description.
+
+This tool analyzes 1000+ LinkedIn job descriptions for roles like **Data Analyst**, **Data Engineer**, and **Data Scientist** using Natural Language Processing (NLP). It extracts key terms and generates a tailored resume for you, including a compelling profile, relevant soft skills, and essential technical skills—all optimized to match job market requirements.
+""")
 st.markdown("---")
-st.markdown("When applying for jobs, your resume often faces an initial screening by either a non-specialist recruiter quickly sifting through many applications or an automated system.")
-st.markdown("The key to success at this stage is ensuring your skills and experience directly align with the job description.")
-st.markdown("This tool analyzes 1000+ LinkedIn job descriptions for roles like data analyst, data engineer, and data scientist using Natural Language Processing (NLP). By extracting key terms, the AI then generates a tailored resume for you, including a compelling profile, relevant soft skills, and essential technical skills, all optimized to match the job's requirements.")
+
 
 # Role Selection
 col1, col2 = st.columns(2)
