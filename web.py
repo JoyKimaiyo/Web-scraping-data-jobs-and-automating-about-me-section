@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-sem = Semaphore(4)  # Limit coqncurrency
+sem = Semaphore(6)  # Increased concurrency
 
 # --- CONFIGURATION ---
 def load_config(config_file):
@@ -87,16 +87,12 @@ def get_job_cards(config):
             url = f"https://www.linkedin.com/jobs/search/?keywords={keyword}{location_param}&f_TPR=r{config['date_range']}&position=1&pageNum=0"
 
             try:
-                tm.sleep(random.uniform(1, 3))
+                tm.sleep(random.uniform(1, 2))
                 response = session.get(url, headers=headers, timeout=15)
                 response.raise_for_status()
 
                 soup = BeautifulSoup(response.text, "html.parser")
                 job_elements = soup.find_all("div", class_="base-card")
-
-                if not job_elements:
-                    logger.warning(f"No job elements found for {keyword} in {location or 'global'}")
-                    continue
 
                 for job_elem in job_elements:
                     try:
@@ -109,7 +105,6 @@ def get_job_cards(config):
                         location_span = job_elem.find("span", class_="job-search-card__location")
                         time_tag = job_elem.find("time")
 
-                        # Capture work type (Remote, Onsite, Hybrid)
                         work_type = "N/A"
                         if location_span:
                             location_text = location_span.text.strip().lower()
@@ -149,7 +144,7 @@ async def try_goto(page, url, retries=1):
         except Exception as e:
             if attempt == retries:
                 raise
-            await page.wait_for_timeout(random.randint(2000, 4000))
+            await page.wait_for_timeout(random.randint(1000, 3000))
 
 # --- JOB DETAILS SCRAPER ---
 async def scrape_job_details(page, url):
@@ -164,14 +159,12 @@ async def scrape_job_details(page, url):
         }
 
     try:
-        await page.wait_for_selector("div.description__text", timeout=10000)
+        await page.wait_for_selector("div.description__text", timeout=5000)
         description = await page.locator("div.description__text").inner_text()
     except:
         description = "N/A"
 
-    job_info = {
-        "description": description.strip()
-    }
+    job_info = {"description": description.strip()}
 
     try:
         job_info["work_type"] = await page.locator("span:has-text('Work type') + span").inner_text()
@@ -186,21 +179,20 @@ async def scrape_job_details(page, url):
     return job_info
 
 # --- JOB HANDLER ---
-async def process_job(job, page):
+async def process_job(job, context):
     async with sem:
         try:
-            logger.info(f"🔎 Processing: {job['title']}")
-            await stealth_async(page)
+            page = await context.new_page()
             details = await scrape_job_details(page, job["job_url"])
             job.update(details)
             save_to_db(job)
+            await page.close()
         except Exception as e:
             logger.error(f"❌ Error processing job {job['job_url']}: {e}")
 
 # --- MAIN SCRAPER FUNCTION ---
 async def run_scraper(config_path):
     start_time = tm.perf_counter()
-    processed_jobs = 0
 
     try:
         config = load_config(config_path)
@@ -211,24 +203,23 @@ async def run_scraper(config_path):
         logger.info(f"Found {len(all_jobs)} total jobs in initial search")
 
         if not all_jobs:
-            logger.warning("No jobs found at all. Possible issues:")
-            logger.warning("1. LinkedIn is blocking your requests (try changing IP or adding more headers)")
-            logger.warning("2. The selectors are outdated (check LinkedIn's current HTML structure)")
-            logger.warning("3. Your search parameters are too restrictive")
+            logger.warning("No jobs found. Possible issues:")
             return
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                viewport={"width": 1920, "height": 1080}
+                viewport={"width": 1920, "height": 1080},
+                java_script_enabled=True,
+                bypass_csp=True,
+                ignore_https_errors=True
             )
-            page = await context.new_page()
 
-            for job in all_jobs:
-                await process_job(job, page)
-                processed_jobs += 1
-                await page.wait_for_timeout(random.randint(500, 1500))
+            await stealth_async(context)
+
+            tasks = [process_job(job, context) for job in all_jobs]
+            await asyncio.gather(*tasks)
 
             await browser.close()
 
@@ -237,7 +228,7 @@ async def run_scraper(config_path):
     finally:
         end_time = tm.perf_counter()
         logger.info(f"Scraping completed in {end_time - start_time:.2f} seconds")
-        logger.info(f"Total jobs processed: {processed_jobs}")
+        logger.info(f"Total jobs processed: {len(all_jobs)}")
 
 # --- ENTRY POINT ---
 if __name__ == "__main__":

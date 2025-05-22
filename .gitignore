@@ -8,6 +8,7 @@
 !data_app.py
 !clean_jobs.csv
 !requirements.txt
+!Screencast from 2025-04-23 12-27-18.webm
 
 # Also don't ignore the .gitignore file itself
 !.gitignore
