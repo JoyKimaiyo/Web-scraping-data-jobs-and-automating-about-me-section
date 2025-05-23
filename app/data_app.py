@@ -48,14 +48,44 @@ def generate_with_gemini(prompt):
     except Exception as e:
         return f"⚠️ Unexpected Error: {str(e)}"
 
-# --- Load Jobs from CSV (Cached) ---
+# --- Load & Clean Jobs from CSV (Cached) ---
+@st.cache_data
+def simplify_title(title):
+    title_lower = str(title).lower()
+    if 'data scientist' in title_lower:
+        return 'Data Scientist'
+    elif 'data engineer' in title_lower:
+        return 'Data Engineer'
+    elif 'data analyst' in title_lower or 'data analytics' in title_lower:
+        return 'Data Analyst'
+    elif 'machine learning' in title_lower or 'ml engineer' in title_lower:
+        return 'Machine Learning Engineer'
+    else:
+        return title  # leave unchanged
 
 @st.cache_data
-def fetch_jobs_from_csv(role):
+def fetch_and_clean_jobs(role):
     try:
         df = pd.read_csv("clean_jobs.csv")
+
+        # Drop unused columns if present
+        df.drop(columns=['work_type', 'employment_type'], inplace=True, errors='ignore')
+
+        # Simplify titles
+        df['title'] = df['title'].apply(simplify_title)
+
+        # Filter based on role
         df = df[df['title'].str.contains(role, case=False, na=False)]
+
+        # Drop rows without descriptions and strip whitespace
+        df = df.dropna(subset=['description'])
+        df['description'] = df['description'].str.strip()
+
+        # Optional: Remove duplicate job listings
+        df.drop_duplicates(subset=['title', 'description'], inplace=True)
+
         return df
+
     except Exception as e:
         st.error(f"CSV Load Error: {str(e)}")
         return pd.DataFrame()
@@ -116,17 +146,16 @@ This tool analyzes 1000+ LinkedIn job descriptions for roles like **Data Analyst
 """)
 st.markdown("---")
 
-
 # Role Selection
 col1, col2 = st.columns(2)
 with col1:
-    role = st.selectbox("Select Role", ["Data Engineer", "Data Analyst", "Data Scientist"])
+    role = st.selectbox("Select Role", ["Data Engineer", "Data Analyst", "Data Scientist", "Machine Learning Engineer"])
 with col2:
     level = st.selectbox("Select Level", ["Entry Level", "Junior", "Senior"])
 
 # Main Generation
 if st.button("Generate Professional About Me", type="primary"):
-    jobs_df = fetch_jobs_from_csv(role)
+    jobs_df = fetch_and_clean_jobs(role)
 
     if not jobs_df.empty:
         job_descriptions = jobs_df["description"].dropna().tolist()
@@ -187,7 +216,7 @@ Format:
 
             # Soft Skills Generation
             soft_skill_prompt = f"""
-Based on the job descriptions, list 2 soft skills that are most valuable for a {level} {role}.
+Based on the job descriptions, list 4 soft skills that are most valuable for a {level} {role}.
 
 Format:
 - Markdown bullet list
@@ -226,4 +255,3 @@ Job Context:
     cover_letter = generate_with_gemini(cover_prompt)
     st.subheader("📝 Cover Letter")
     st.write(cover_letter)
-
