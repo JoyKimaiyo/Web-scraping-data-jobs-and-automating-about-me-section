@@ -3,6 +3,8 @@ streamlit==1.35.0
 pandas
 requests
 python-dotenv
+matplotlib
+wordcloud
 
 # NLP and data analysis
 scikit-learn
