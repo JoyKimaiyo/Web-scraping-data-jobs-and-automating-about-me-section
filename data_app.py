@@ -17,15 +17,28 @@ def generate_with_gemini(prompt):
     api_key = st.secrets["GM_API_TOKEN"]
     api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
 
-    headers = {"Content-Type": "application/json"}
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": prompt
+                    }
+                ]
+            }
+        ]
+    }
 
     try:
         response = requests.post(api_url, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         result = response.json()
 
-        if 'candidates' in result and result['candidates']:
+        if 'candidates' in result and len(result['candidates']) > 0:
             return result['candidates'][0]['content']['parts'][0]['text']
         return "⚠️ Error: Empty response from Gemini API"
 
@@ -49,19 +62,31 @@ def simplify_title(title):
     elif 'machine learning' in title_lower or 'ml engineer' in title_lower:
         return 'Machine Learning Engineer'
     else:
-        return title
+        return title  # leave unchanged
 
 @st.cache_data
 def fetch_and_clean_jobs(role):
     try:
         df = pd.read_csv("clean_jobs.csv")
+
+        # Drop unused columns if present
         df.drop(columns=['work_type', 'employment_type'], inplace=True, errors='ignore')
+
+        # Simplify titles
         df['title'] = df['title'].apply(simplify_title)
+
+        # Filter based on role
         df = df[df['title'].str.contains(role, case=False, na=False)]
+
+        # Drop rows without descriptions and strip whitespace
         df = df.dropna(subset=['description'])
         df['description'] = df['description'].str.strip()
+
+        # Optional: Remove duplicate job listings
         df.drop_duplicates(subset=['title', 'description'], inplace=True)
+
         return df
+
     except Exception as e:
         st.error(f"CSV Load Error: {str(e)}")
         return pd.DataFrame()
@@ -73,10 +98,12 @@ def extract_keywords(texts, n=10):
         combined_text = " ".join(texts)
         words = [word.lower() for word in combined_text.split() if word.isalpha() and len(word) > 2]
         word_freq = Counter(words)
+
         vectorizer = TfidfVectorizer(max_features=50, stop_words='english')
         tfidf_matrix = vectorizer.fit_transform(texts)
         feature_names = vectorizer.get_feature_names_out()
         tfidf_scores = np.sum(tfidf_matrix, axis=0).A1
+
         keywords = {word: score * 5 + word_freq.get(word, 0) for word, score in zip(feature_names, tfidf_scores)}
         sorted_keywords = sorted(keywords.items(), key=lambda x: x[1], reverse=True)
         return [word[0] for word in sorted_keywords[:n]]
@@ -99,9 +126,11 @@ with st.sidebar:
 
     *Powered by Gemini AI and NLP analysis*
     """)
+
     if 'last_api_response' in st.session_state:
         with st.expander("Last API Response"):
             st.json(st.session_state.last_api_response)
+
     st.markdown("---")
     st.markdown("### How to use:")
     st.markdown("1. Select your target role and experience level")
@@ -109,6 +138,13 @@ with st.sidebar:
     st.markdown("3. Copy the results to your resume")
 
 st.title("AI-Powered CV Builder 📝")
+st.markdown("""
+When applying for jobs, your resume often faces an initial screening—either by a non-specialist recruiter quickly skimming applications or by an automated system.
+
+The key to success is ensuring your skills and experience directly align with the job description.
+
+This tool analyzes 1000+ LinkedIn job descriptions for roles like **Data Analyst**, **Data Engineer**, and **Data Scientist** using Natural Language Processing (NLP). It extracts key terms and generates a tailored resume for you, including a compelling profile, relevant soft skills, and essential technical skills—all optimized to match job market requirements.
+""")
 st.markdown("---")
 
 # Role Selection
@@ -141,6 +177,7 @@ if st.button("Generate Professional About Me", type="primary"):
             prompt = f"""You are a professional CV writer. Generate a compelling 'About Me' section for a {level} {role} based on these job requirements:
 
 Job Descriptions:
+Job Descriptions:
 {combined_descriptions}
 
 Guidelines:
@@ -148,12 +185,16 @@ Guidelines:
 2. Style: Professional but approachable
 3. Include: Core skills, achievements, and value proposition
 4. Format: Complete sentences, no bullet points
-5. Avoid: Generic phrases like "team player"
+5. Avoid: Generic phrases like \"team player\"
+
+Example Structure:
+\"[Role] with [X] years of experience in [skills]. Specialized in [specific area]. Proven track record of [achievement]. Passionate about [relevant interest].\"
 """
             about_me = generate_with_gemini(prompt)
             st.subheader("✨ Your AI-Tailored 'About Me'")
             st.success(about_me)
 
+            # Technical Skills Generation
             skill_prompt = f"""
 Extract the top 5 technical skills for a {level} {role} from these job descriptions:
 
@@ -165,6 +206,7 @@ Format:
 """
             skills = generate_with_gemini(skill_prompt)
 
+            # Soft Skills Generation
             soft_skill_prompt = f"""
 Based on the job descriptions, list 4 soft skills that are most valuable for a {level} {role}.
 
@@ -197,7 +239,7 @@ Requirements:
   2. Body: Match skills to job requirements
   3. Closing: Call to action + contact info
 - Include: 2-3 specific achievements
-- Avoid: Generic phrases like "I'm perfect for this role"
+- Avoid: Generic phrases like \"I'm perfect for this role\"
 
 Job Context:
 {combined_descriptions if 'combined_descriptions' in locals() else 'No job descriptions loaded'}
@@ -205,4 +247,3 @@ Job Context:
     cover_letter = generate_with_gemini(cover_prompt)
     st.subheader("📝 Cover Letter")
     st.write(cover_letter)
-
