@@ -1,0 +1,13 @@
+# Streamlit app dependencies
+streamlit==1.35.0
+pandas
+requests
+python-dotenv
+
+# NLP and data analysis
+scikit-learn
+numpy
+plotly
+
+# Optional (for faster parsing or safety)
+tqdm
