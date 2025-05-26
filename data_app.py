@@ -12,10 +12,10 @@ from wordcloud import WordCloud
 # Load environment variables
 load_dotenv()
 
-# --- Gemini API Function ---
+# --- Gemini API Function (v2.0 Flash) ---
 def generate_with_gemini(prompt):
-    api_key = st.secrets["GM_API_TOKEN"]
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    api_key = st.secrets["GM_API_TOKEN"]  # Use your actual key or st.secrets
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
     headers = {
         "Content-Type": "application/json"
@@ -62,36 +62,24 @@ def simplify_title(title):
     elif 'machine learning' in title_lower or 'ml engineer' in title_lower:
         return 'Machine Learning Engineer'
     else:
-        return title  # leave unchanged
+        return title
 
 @st.cache_data
 def fetch_and_clean_jobs(role):
     try:
         df = pd.read_csv("clean_jobs.csv")
-
-        # Drop unused columns if present
         df.drop(columns=['work_type', 'employment_type'], inplace=True, errors='ignore')
-
-        # Simplify titles
         df['title'] = df['title'].apply(simplify_title)
-
-        # Filter based on role
         df = df[df['title'].str.contains(role, case=False, na=False)]
-
-        # Drop rows without descriptions and strip whitespace
         df = df.dropna(subset=['description'])
         df['description'] = df['description'].str.strip()
-
-        # Optional: Remove duplicate job listings
         df.drop_duplicates(subset=['title', 'description'], inplace=True)
-
         return df
-
     except Exception as e:
         st.error(f"CSV Load Error: {str(e)}")
         return pd.DataFrame()
 
-# --- NLP Keyword Extraction (Cached) ---
+# --- NLP Keyword Extraction ---
 @st.cache_data
 def extract_keywords(texts, n=10):
     try:
@@ -124,9 +112,8 @@ with st.sidebar:
     - Identifies key skills and keywords
     - Generates tailored content for your CV
 
-    *Powered by Gemini AI and NLP analysis*
+    *Powered by Gemini 2.0 Flash + NLP*
     """)
-
     if 'last_api_response' in st.session_state:
         with st.expander("Last API Response"):
             st.json(st.session_state.last_api_response)
@@ -164,7 +151,6 @@ if st.button("Generate Professional About Me", type="primary"):
 
         with st.spinner("Analyzing job descriptions and generating content..."):
             st.subheader("☁️ Word Cloud for This Role")
-            # Generate and display word cloud
             wordcloud = WordCloud(width=800, height=400, background_color='white', stopwords='english').generate(combined_descriptions)
             fig, ax = plt.subplots(figsize=(10, 5))
             ax.imshow(wordcloud, interpolation='bilinear')
@@ -177,7 +163,6 @@ if st.button("Generate Professional About Me", type="primary"):
             prompt = f"""You are a professional CV writer. Generate a compelling 'About Me' section for a {level} {role} based on these job requirements:
 
 Job Descriptions:
-Job Descriptions:
 {combined_descriptions}
 
 Guidelines:
@@ -185,10 +170,7 @@ Guidelines:
 2. Style: Professional but approachable
 3. Include: Core skills, achievements, and value proposition
 4. Format: Complete sentences, no bullet points
-5. Avoid: Generic phrases like \"team player\"
-
-Example Structure:
-\"[Role] with [X] years of experience in [skills]. Specialized in [specific area]. Proven track record of [achievement]. Passionate about [relevant interest].\"
+5. Avoid: Generic phrases like "team player"
 """
             about_me = generate_with_gemini(prompt)
             st.subheader("✨ Your AI-Tailored 'About Me'")
@@ -239,7 +221,7 @@ Requirements:
   2. Body: Match skills to job requirements
   3. Closing: Call to action + contact info
 - Include: 2-3 specific achievements
-- Avoid: Generic phrases like \"I'm perfect for this role\"
+- Avoid: Generic phrases like "I'm perfect for this role"
 
 Job Context:
 {combined_descriptions if 'combined_descriptions' in locals() else 'No job descriptions loaded'}
@@ -247,3 +229,4 @@ Job Context:
     cover_letter = generate_with_gemini(cover_prompt)
     st.subheader("📝 Cover Letter")
     st.write(cover_letter)
+
